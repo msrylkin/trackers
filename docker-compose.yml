@@ -1,0 +1,80 @@
+version: "3.8"
+
+volumes:
+  trackers-pg-db-data:
+  trackers-ch-db-data:
+
+networks:
+  trackers_network:
+
+services:
+  trackers-api:
+    networks:
+      - trackers_network
+    command: start
+    depends_on:
+      - trackers-pg-db
+      - tracker-ch-db
+      - zookeeper
+      - kafka
+    container_name: trackers-api
+    volumes:
+      - ./:/usr/src/app
+      - /usr/src/app/node_modules/
+    ports:
+      - "9093:9093"
+    build: .
+
+  trackers-pg-db:
+    networks:
+      - trackers_network
+    image: postgres:13.1
+    container_name: trackers-pg-db
+    restart: always
+    ports:
+      - "5489:5432"
+    environment:
+      - POSTGRES_USER=trackers-db
+      - POSTGRES_PASSWORD=123456
+      - POSTGRES_DB=trackers
+    volumes:
+      - trackers-pg-db-data:/var/lib/postgresql/data
+
+  tracker-ch-db:
+    networks:
+      - trackers_network
+    image: yandex/clickhouse-server:21.5.6.6
+    container_name: tracker-ch-db
+    restart: always
+    ports:
+      - "8123:8123"
+    volumes:
+      - trackers-ch-db-data:/var/lib/clickhouse
+
+  zookeeper:
+    networks:
+      - trackers_network
+    image: wurstmeister/zookeeper
+    ports:
+      - "2181:2181"
+
+  kafka:
+    networks:
+      - trackers_network
+    image: wurstmeister/kafka
+    ports:
+      - "9094:9094"
+    hostname: kafka
+    environment:
+      - KAFKA_ADVERTISED_HOST_NAME=kafka
+      - KAFKA_ADVERTISED_PORT=9092
+      - KAFKA_ZOOKEEPER_CONNECT=zookeeper:2181
+      - KAFKA_CREATE_TOPICS=tracker-events:1:1
+      - KAFKA_LISTENERS=INTERNAL://kafka:9092,OUTSIDE://kafka:9094
+      - KAFKA_ADVERTISED_LISTENERS=INTERNAL://kafka:9092,OUTSIDE://localhost:9094
+      - KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=INTERNAL:PLAINTEXT,OUTSIDE:PLAINTEXT
+      - KAFKA_INTER_BROKER_LISTENER_NAME=INTERNAL
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+
+
