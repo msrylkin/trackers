@@ -1,4 +1,4 @@
-const { createChClient, createKafkaClient, createPgClient } = require('./db');
+const { createChClient, createKafkaClient, createPgClient, createRedisClient } = require('./db');
 const { test } = require('tap');
 const rewire = require('rewire');
 const uuid = require('uuid');
@@ -13,8 +13,9 @@ test('trackers test', async t => {
     const kafka = createKafkaClient();
     const clickhouse = createChClient();
     const pg = createPgClient();
+    const redis = createRedisClient();
 
-    const app = await buildServer({ kafka, pg, clickhouse });
+    const app = await buildServer({ kafka, pg, clickhouse, redis });
 
     t.teardown(() => app.close());
 

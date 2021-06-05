@@ -1,6 +1,7 @@
 const { Client } = require('pg');
 const { ClickHouse } = require('clickhouse');
 const { Kafka } = require('kafkajs');
+const redis = require('redis');
 
 function createPgClient() {
     return new Client({
@@ -26,8 +27,16 @@ function createKafkaClient() {
     });
 }
 
+function createRedisClient() {
+    return redis.createClient({
+        host: 'trackers-redis',
+        port: 6379
+    });
+}
+
 module.exports = {
     createPgClient,
     createKafkaClient,
-    createChClient
+    createChClient,
+    createRedisClient
 }

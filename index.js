@@ -1,4 +1,4 @@
-const { createPgClient, createChClient, createKafkaClient } = require('./db');
+const { createPgClient, createChClient, createKafkaClient, createRedisClient } = require('./db');
 const buildServer = require('./server');
 
 (async () => {
@@ -6,8 +6,9 @@ const buildServer = require('./server');
         const kafka = createKafkaClient();
         const clickhouse = createChClient();
         const pg = createPgClient();
+        const redis = createRedisClient();
 
-        const app = await buildServer({ kafka, pg, clickhouse }, { logger: true, trustProxy: true });
+        const app = await buildServer({ kafka, pg, clickhouse, redis }, { logger: true, trustProxy: true });
 
         await app.listen(9093, '0.0.0.0');
     } catch (err) {

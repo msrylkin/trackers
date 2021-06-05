@@ -4,13 +4,21 @@ const dayjs = require('dayjs');
 const utc = require('dayjs/plugin/utc');
 const SqlString = require('sqlstring');
 const fastifyCookie = require('fastify-cookie');
+const { promisify } = require("util");
 
 dayjs.extend(utc);
 
 const DATETIME_FORMAT = 'YYYY-MM-DD HH:mm:ss';
 const DATE_FORMAT = 'YYYY-MM-DD';
 
-async function build({ kafka, pg, clickhouse, onClose }, fastifyOpts = {}) {
+const TRACKER_CACHE_TTL_SECONDS = 60 * 5; // 5 минут
+
+const getCacheTrackerKey = trackerId => `cache:trackers:${trackerId}`;
+
+async function build({ kafka, pg, clickhouse, redis }, fastifyOpts = {}) {
+    const redisGet = promisify(redis.get.bind(redis));
+    const redisSetEx = promisify(redis.setex.bind(redis));
+
     const app = fastify(fastifyOpts);
 
     app.register(fastifyCookie, {});
@@ -40,8 +48,29 @@ async function build({ kafka, pg, clickhouse, onClose }, fastifyOpts = {}) {
             });
         }
 
-        const result = await pg.query(`SELECT * FROM trackers WHERE id = $1`, [ tracker_id ]);
-        const tracker = result && result.rows && result.rows[0];
+        let tracker;
+
+        const cachedTracker = await redisGet(getCacheTrackerKey(tracker_id));
+
+        if (cachedTracker) {
+            tracker = JSON.parse(cachedTracker);
+        } else {
+            const result = await pg.query(`SELECT * FROM trackers WHERE id = $1`, [ tracker_id ]);
+            tracker = result && result.rows && result.rows[0];
+
+            if (tracker) {
+                redisSetEx(
+                    getCacheTrackerKey(tracker_id),
+                    TRACKER_CACHE_TTL_SECONDS,
+                    JSON.stringify(tracker)
+                ).catch(err => {
+                    app.log.error(
+                        `Error at setting tracker cache, trackerId: ${tracker_id} `
+                        + `message: ${err.message} stack: ${err.stack}`
+                    );
+                });
+            }
+        }
 
         if (!tracker) {
             return reply.code(404).send({
@@ -121,6 +150,7 @@ async function build({ kafka, pg, clickhouse, onClose }, fastifyOpts = {}) {
     app.addHook('onClose', () => {
        producer.disconnect();
        pg.end();
+       redis.quit();
     });
 
     return app;

@@ -3,6 +3,7 @@ version: "3.8"
 volumes:
   trackers-pg-db-data:
   trackers-ch-db-data:
+  trackers-redis-db-data:
 
 networks:
   trackers_network:
@@ -17,6 +18,7 @@ services:
       - tracker-ch-db
       - zookeeper
       - kafka
+      - trackers-redis
     container_name: trackers-api
     volumes:
       - ./:/usr/src/app
@@ -77,4 +79,10 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
 
-
+  trackers-redis:
+    networks:
+      - trackers_network
+    image: "redis:6.0.14"
+    container_name: trackers-redis
+    volumes:
+      - trackers-redis-db-data:/data
