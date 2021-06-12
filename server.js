@@ -117,11 +117,11 @@ async function build({ kafka, pg, clickhouse, redis }, fastifyOpts = {}) {
         }
 
         if (from) {
-            query += ` ${trackerId ? 'AND' : 'WHERE'} date_time > '${dayjs(from).format(DATETIME_FORMAT)}'`;
+            query += ` ${trackerId ? 'AND' : 'WHERE'} date >= '${dayjs(from).format(DATE_FORMAT)}' AND date_time > '${dayjs(from).format(DATETIME_FORMAT)}'`;
         }
 
         if (to) {
-            query += ` ${trackerId || to ? 'AND' : 'WHERE'} date_time < '${dayjs(to).format(DATETIME_FORMAT)}'`;
+            query += ` ${trackerId || from ? 'AND' : 'WHERE'} date <= '${dayjs(to).format(DATE_FORMAT)}' AND date_time < '${dayjs(to).format(DATETIME_FORMAT)}'`;
         }
 
         const [ { count } ] = await clickhouse.query(query).toPromise();
