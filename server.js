@@ -85,7 +85,7 @@ async function build({ kafka, pg, clickhouse, redis }, fastifyOpts = {}) {
                         date: dayjs(eventDate).utc().format(DATE_FORMAT),
                         date_time: dayjs(eventDate).utc().format(DATETIME_FORMAT),
                         event_id: eventId,
-                        tracker_id: tracker.id,
+                        tracker_id: trackerUuid,
                         ip: req.ip,
                         user_id: user_id || newUserId,
                         user_agent: req.headers['user-agent'],
