@@ -1,5 +1,5 @@
 const fastify = require('fastify');
-const { v4: uuid } = require('uuid');
+const { v4: uuid, validate: uuidValidate } = require('uuid');
 const dayjs = require('dayjs');
 const utc = require('dayjs/plugin/utc');
 const SqlString = require('sqlstring');
@@ -29,43 +29,36 @@ async function build({ kafka, pg, clickhouse, redis }, fastifyOpts = {}) {
     await pg.connect();
 
     app.get('/track', async (req, reply) => {
-        const { tracker_id } = req.query;
+        const { id: trackerUuid } = req.query;
         const { user_id } = req.cookies || {};
+        const newUserId = uuid();
 
-        if (!tracker_id) {
+        if (!uuidValidate(trackerUuid)) {
             return reply.code(422).send({
                 success: false,
                 code: 'VALIDATION_ERROR',
-                message: 'Wrong tracker_id query param',
-            });
-        }
-
-        if (!user_id) {
-            return reply.code(403).send({
-                success: false,
-                code: 'UNAUTHORIZED',
-                message: 'Missing user_id cookie',
+                message: 'Wrong id query param',
             });
         }
 
         let tracker;
 
-        const cachedTracker = await redisGet(getCacheTrackerKey(tracker_id));
+        const cachedTracker = await redisGet(getCacheTrackerKey(trackerUuid));
 
         if (cachedTracker) {
             tracker = JSON.parse(cachedTracker);
         } else {
-            const result = await pg.query(`SELECT * FROM trackers WHERE id = $1`, [ tracker_id ]);
+            const result = await pg.query(`SELECT * FROM trackers WHERE uuid = $1`, [ trackerUuid ]);
             tracker = result && result.rows && result.rows[0];
 
             if (tracker) {
                 redisSetEx(
-                    getCacheTrackerKey(tracker_id),
+                    getCacheTrackerKey(trackerUuid),
                     TRACKER_CACHE_TTL_SECONDS,
                     JSON.stringify(tracker)
                 ).catch(err => {
                     app.log.error(
-                        `Error at setting tracker cache, trackerId: ${tracker_id} `
+                        `Error at setting tracker cache, trackerUUID: ${trackerUuid} `
                         + `message: ${err.message} stack: ${err.stack}`
                     );
                 });
@@ -76,7 +69,7 @@ async function build({ kafka, pg, clickhouse, redis }, fastifyOpts = {}) {
             return reply.code(404).send({
                 success: false,
                 code: 'NOT_FOUND',
-                message: `Tracker with id ${tracker_id} was not found`,
+                message: `Tracker with uuid ${trackerUuid} was not found`,
             });
         }
 
@@ -94,7 +87,7 @@ async function build({ kafka, pg, clickhouse, redis }, fastifyOpts = {}) {
                         event_id: eventId,
                         tracker_id: tracker.id,
                         ip: req.ip,
-                        user_id: req.cookies.user_id,
+                        user_id: user_id || newUserId,
                         user_agent: req.headers['user-agent'],
                         url: `${req.protocol}://${req.hostname}${req.url}`,
                         value: tracker.value,
@@ -103,9 +96,7 @@ async function build({ kafka, pg, clickhouse, redis }, fastifyOpts = {}) {
             ]
         });
 
-        return reply.send({
-            success: true
-        });
+        return reply.cookie('user_id', newUserId).code(204).send();
     });
 
     app.get('/stats', async (req, reply) => {
